@@ -27,6 +27,12 @@ using WicNet;
 using ColorProfile = ImageMagick.ColorProfile;
 
 namespace ImageGlass.Base.Photoing.Codecs;
+using System;
+using System.IO;
+using PixelFormats = System.Windows.Media.PixelFormats;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 
 /// <summary>
@@ -63,7 +69,7 @@ public static class PhotoCodec
         meta.FileCreationTime = fi.CreationTime;
         meta.FileLastWriteTime = fi.LastWriteTime;
         meta.FileLastAccessTime = fi.LastAccessTime;
-
+        
         try
         {
             var settings = ParseSettings(options, false, filePath);
@@ -128,6 +134,9 @@ public static class PhotoCodec
                 {
                     // ExifRatingPercent
                     meta.ExifRatingPercent = GetExifValue(exifProfile, ExifTag.RatingPercent);
+
+                   // ExifCameraMaker
+                    meta.CameraMaker = GetExifValue(exifProfile, ExifTag.Make);
 
                     // ExifDateTimeOriginal
                     var dt = GetExifValue(exifProfile, ExifTag.DateTimeOriginal);
@@ -825,8 +834,8 @@ public static class PhotoCodec
     /// <param name="imgC"></param>
     /// <param name="ext">File extension, e.g: <c>.gif</c></param>
     private static bool CheckAnimatedFormat(MagickImageCollection imgC, string? ext)
-    {
-        var isAnimatedExtension = ext == ".GIF" || ext == ".GIFV" || ext == ".WEBP" || ext == ".JXL";
+        {
+            var isAnimatedExtension = ext == ".GIF" || ext == ".GIFV" || ext == ".WEBP" || ext == ".JXL";
 
         var canAnimate = imgC.Count > 1
             && (isAnimatedExtension || imgC.Any(i => i.GifDisposeMethod != GifDisposeMethod.Undefined));
@@ -839,8 +848,8 @@ public static class PhotoCodec
     /// Read image file using stream
     /// </summary>
     private static (bool loadSuccessful, IgImgData result, string ext, MagickReadSettings settings) ReadWithStream(string filePath, CodecReadOptions? options = null, ImgTransform? transform = null, IgMetadata? metadata = null)
-    {
-        options ??= new();
+                    {
+                        options ??= new();
         var loadSuccessful = true;
 
         metadata ??= LoadMetadata(filePath, options);
@@ -854,6 +863,7 @@ public static class PhotoCodec
             CanAnimate = metadata?.CanAnimate ?? false,
         };
 
+        var CameraMaker = metadata.CameraMaker ?? null;
 
         #region Read image data
         switch (ext)
@@ -875,8 +885,8 @@ public static class PhotoCodec
                     result.Image = BHelper.ToWicBitmapSource(base64Content);
 
                     if (result.FrameCount == 1)
-                    {
-                        result.Image = TransformImage(result.Image, transform);
+                        {
+                            result.Image = TransformImage(result.Image, transform);
                     }
                 }
                 break;
@@ -900,8 +910,8 @@ public static class PhotoCodec
                 {
                     loadSuccessful = false;
                 }
-                break;
-
+                                break;
+                            
             case ".WEBP":
                 try
                 {
@@ -957,8 +967,35 @@ public static class PhotoCodec
                         TransformImage(imgM, transform);
                         result.Image = BHelper.ToWicBitmapSource(imgM.ToBitmapSource());
                     }
-                }
+}
                 catch
+                {
+                    loadSuccessful = false;
+                }
+                break;
+            case ".JPG":
+                if (CameraMaker == "HUAWEI")
+                {
+                    var bmpFrame = HdrMergeUtil.DecodeHdrJpeg(filePath);
+
+                    using (var stream = new MemoryStream())
+                    {
+                        int w = bmpFrame.PixelWidth;
+                        int h = bmpFrame.PixelHeight;
+                        int stride = w * sizeof(uint);  // 4 bytes per pixel
+
+                        // CopyPixels to uint[]
+                        uint[] pixels = new uint[w * h];
+                        bmpFrame.CopyPixels(pixels, stride, 0);
+
+                        // uint[] → byte[]
+                        byte[] buffer = new byte[pixels.Length * sizeof(uint)];
+                        Buffer.BlockCopy(pixels, 0, buffer, 0, buffer.Length);
+
+                        result.Image = WicBitmapSource.FromMemory(w, h, WicPixelFormat.GUID_WICPixelFormat32bppBGR101010, stride, buffer);
+                    }
+                }
+                else
                 {
                     loadSuccessful = false;
                 }
@@ -991,8 +1028,8 @@ public static class PhotoCodec
             else if (result.Source is Bitmap bmp)
             {
                 if (bmp.Width > options.Width || bmp.Height > options.Height)
-                {
-                    imgM.Read(bmp);
+            {
+                imgM.Read(bmp);
 
                     ApplySizeSettings(imgM, options);
 
@@ -1011,8 +1048,8 @@ public static class PhotoCodec
     /// </summary>
     private static async Task<IgImgData> LoadWithMagickImageAsync(string filename, string ext,
         MagickReadSettings settings, CodecReadOptions options, ImgTransform? transform, CancellationToken cancelToken)
-    {
-        var data = await ReadMagickImageAsync(filename, ext, settings, options, transform, cancelToken);
+                    {
+                        var data = await ReadMagickImageAsync(filename, ext, settings, options, transform, cancelToken);
         var result = new IgImgData(data);
 
         return result;
@@ -1042,8 +1079,8 @@ public static class PhotoCodec
         else
         {
             readFirstFrameOnly = options.FirstFrameOnly.Value;
-        }
-
+                            }
+                            
 
         // read all frames
         if (imgColl.Count > 1 && readFirstFrameOnly is false)
@@ -1065,9 +1102,9 @@ public static class PhotoCodec
             }
 
             result.MultiFrameImage = imgColl;
-            return result;
-        }
-
+                        return result;
+                    }
+                    
 
         // read a single frame only
         var imgM = new MagickImage();
@@ -1089,8 +1126,8 @@ public static class PhotoCodec
                     // check min size
                     if (imgM.Width > options.EmbeddedThumbnailMinWidth
                         && imgM.Height > options.EmbeddedThumbnailMinHeight)
-                    {
-                        imgM.Read(thumbnailData, settings);
+    {
+        imgM.Read(thumbnailData, settings);
                         hasRequestedThumbnail = true;
                     }
                 }
@@ -1193,7 +1230,7 @@ public static class PhotoCodec
             await imgM.ReadAsync(fs, settings, cancelToken);
             await fs.DisposeAsync();
 
-            // delete the temp file
+        // delete the temp file
             File.Delete(tempFilePath);
 
             return imgM;
@@ -1240,9 +1277,9 @@ public static class PhotoCodec
         var newH = (int)(srcHeight * scale);
 
         return new Size(newW, newH);
-    }
+        }
 
-
+        
     /// <summary>
     /// Processes single-frame Magick image
     /// </summary>
@@ -1334,15 +1371,15 @@ public static class PhotoCodec
             if (imgM.BaseWidth > options.Width || imgM.BaseHeight > options.Height)
             {
                 imgM.Thumbnail(options.Width, options.Height);
-            }
         }
+}
     }
 
 
-    /// <summary>
-    /// Applies changes from <see cref="ImgTransform"/>.
-    /// </summary>
-    private static void TransformImage(IMagickImage imgM, ImgTransform? transform = null)
+        /// <summary>
+        /// Applies changes from <see cref="ImgTransform"/>.
+        /// </summary>
+        private static void TransformImage(IMagickImage imgM, ImgTransform? transform = null)
     {
         if (transform == null) return;
 
@@ -1504,8 +1541,268 @@ public static class PhotoCodec
         return exifValue.Value;
     }
 
+    public static class HdrMergeUtil
+    {
+        public static BitmapFrame? DecodeHdrJpeg(string path)
+        {
+            byte[] all = File.ReadAllBytes(path);
+            byte[][]? rawData = ExtractApp0AndApp5(all);
+
+            // 3) 如果没提取到就返回 null
+            if (rawData == null)
+            {
+                return null;
+            }
+
+            if (rawData == null || rawData.Length < 2)
+            {
+                return null;
+            }
+                
+            using var ms_sdr = new MemoryStream(all);
+            MemoryStream ms_hdr = new MemoryStream(rawData[1]);
+
+            var decoder = new JpegBitmapDecoder(
+                ms_sdr,
+                BitmapCreateOptions.PreservePixelFormat,
+                BitmapCacheOption.OnLoad);
+
+            var decoder_hdr = new JpegBitmapDecoder(
+                ms_hdr,
+                BitmapCreateOptions.PreservePixelFormat,
+                BitmapCacheOption.OnLoad);
+
+            var sdrFrame = decoder.Frames[0];
+            var gainmapFrame = decoder_hdr.Frames[0];
+
+            BitmapFrame hdrFrame;
+
+            if(rawData.Length == 2)
+            {
+                hdrFrame = MergeSdrHdr(sdrFrame, gainmapFrame);
+                hdrFrame.Freeze();
+                return hdrFrame;
+
+            } 
+            else
+            {
+                return sdrFrame;
+            }
+        }
+
+        static byte[][]? ExtractApp0AndApp5(byte[] jpeg)
+        {
+            int len = jpeg.Length;
+            int? firstStart = null, firstEnd = null;
+            int? secondStart = null, secondEnd = null;
+
+            int i = 0;
+            while (i < len - 3)
+            {
+                // Search SOI+APP0（FF D8 FF E0）
+                if (firstStart == null
+                    && jpeg[i] == 0xFF && jpeg[i + 1] == 0xD8
+                    && jpeg[i + 2] == 0xFF && jpeg[i + 3] == 0xE0)
+                {
+                    firstStart = i;
+
+                    // Search first SOI
+                    int scan = i + 4;
+                    while (scan < len - 1)
+                    {
+                        if (jpeg[scan] == 0xFF && jpeg[scan + 1] == 0xD9)
+                        {
+                            firstEnd = scan + 2;
+                            i = firstEnd.Value; // Continue search after the first EOI
+                            break;
+                        }
+                        scan++;
+                    }
+                    if (firstEnd == null) return null;  // Cannot find the first EOI
+                    continue;
+                }
+
+                // Continue search for SOI+APP5（FF D8 FF E5）
+                if (firstEnd != null
+                    && secondStart == null
+                    && jpeg[i] == 0xFF && jpeg[i + 1] == 0xD8
+                    && jpeg[i + 2] == 0xFF && jpeg[i + 3] == 0xE5)
+                {
+                    secondStart = i;
+                    // Search for the second EOI
+                    int scan = i + 4;
+                    while (scan < len - 1)
+                    {
+                        if (jpeg[scan] == 0xFF && jpeg[scan + 1] == 0xD9)
+                        {
+                            secondEnd = scan + 2;
+                            break;
+                        }
+                        scan++;
+                    }
+                    break;
+                }
+
+                i++;
+            }
+
+            // Find two
+            if (firstStart.HasValue && firstEnd.HasValue
+                && secondStart.HasValue && secondEnd.HasValue)
+            {
+                var sdr = new byte[firstEnd.Value - firstStart.Value];
+                var gain = new byte[secondEnd.Value - secondStart.Value];
+                Array.Copy(jpeg, firstStart.Value, sdr, 0, sdr.Length);
+                Array.Copy(jpeg, secondStart.Value, gain, 0, gain.Length);
+                return new[] { sdr, gain };
+            }
+
+            // Find one
+            if (firstStart.HasValue && firstEnd.HasValue
+                && (secondStart == null || secondEnd == null))
+            {
+                var sdr = new byte[firstEnd.Value - firstStart.Value];
+                return new[] { sdr };
+            }
+            return null;
+        }
+
+        // HLG constants (ARIB STD-B67)
+        private const float a = 0.17883277f;
+        private static readonly float b = 1f - 4f * a;
+        private static readonly float c;
+
+        static HdrMergeUtil()
+        {
+            c = 0.5f - a * MathF.Log(4f * a);
+        }
+
+        public static uint PackBgr101010(float r, float g, float b0)
+        {
+            uint bi = (uint)(Math.Clamp(b0, 0, 1) * 1023 + .5f) & 0x3FF;
+            uint gi = (uint)(Math.Clamp(g, 0, 1) * 1023 + .5f) & 0x3FF;
+            uint ri = (uint)(Math.Clamp(r, 0, 1) * 1023 + .5f) & 0x3FF;
+            return bi | (gi << 10) | (ri << 20);
+        }
+
+
+        // HLG EOTF: HLG → Linear
+        public static BitmapFrame MergeSdrHdr(
+            BitmapFrame SdrFrame,
+            BitmapFrame GainmapFrame)
+        {
+            double scaleX = (double)SdrFrame.PixelWidth / GainmapFrame.PixelWidth;
+            double scaleY = (double)SdrFrame.PixelHeight / GainmapFrame.PixelHeight;
+
+            // scale
+            var scaledGainmap = new TransformedBitmap();
+            scaledGainmap.BeginInit();
+            scaledGainmap.Source = GainmapFrame;
+            scaledGainmap.Transform = new ScaleTransform(scaleX, scaleY);
+            scaledGainmap.EndInit();
+            scaledGainmap.Freeze();
+            
+            // scaledGain.CopyPixels copy to byte[] 
+            int w = SdrFrame.PixelWidth, h = SdrFrame.PixelHeight;
+            byte[] gainRaw = new byte[w * h * 4];
+            scaledGainmap.CopyPixels(
+                gainRaw,
+                w * 4,
+                0
+            );
+
+
+            // 3)  SDR → raw BGRA8
+            byte[] raw = new byte[w * h * 4];
+            SdrFrame.CopyPixels(
+                new Int32Rect(0, 0, w, h),
+                raw, w * 4, 0);
+
+            // 4) Output: 10bit Rec.2020/HLG
+            int stride24 = w * 3;
+            byte[] sdrPixels = new byte[h * stride24];
+            byte[] gainPixels = new byte[h * stride24];
+            SdrFrame.CopyPixels(sdrPixels, stride24, 0);
+            scaledGainmap.CopyPixels(gainPixels, stride24, 0);
+
+            // 3. Create output Bgr101010 WriteableBitmap
+            var outBmp = new WriteableBitmap(
+                w, h, SdrFrame.DpiX, SdrFrame.DpiY,
+                PixelFormats.Bgr101010, null);
+            uint[] outPixels = new uint[w * h];
+
+            // HLG constant
+            const float a = 0.17883277f;
+            float b = 1f - 4f * a;
+            float c = 0.5f - a * MathF.Log(4f * a);
+            float SrgbToLinear(float c0) =>
+                c0 <= 0.04045f ? c0 / 12.92f : MathF.Pow((c0 + 0.055f) / 1.055f, 2.4f);
+            float LinearToHlg(float L) =>
+                L <= 1f / 12f ? MathF.Sqrt(3f * L) : a * MathF.Log(12f * L - b) + c;
+            
+
+            for (int y = 0, i = 0; y < h; y++)
+            {
+                int rowOffset24 = y * stride24;
+                for (int x = 0; x < w; x++, i++)
+                {
+                    int idx24 = rowOffset24 + x * 3;
+                    // SDR BGR → 0–1
+                    float sb = sdrPixels[idx24 + 0] / 255f;
+                    float sg = sdrPixels[idx24 + 1] / 255f;
+                    float sr = sdrPixels[idx24 + 2] / 255f;
+                    
+                    float rawGain_b = gainPixels[idx24 + 0];
+                    float rawGain_g = gainPixels[idx24 + 1];
+                    float rawGain_r = gainPixels[idx24 + 2];
+
+                    float gain_b = rawGain_b / 128f;  // 128→1.0, max≈2.0
+                    float gain_g = rawGain_g / 128f;
+                    float gain_r = rawGain_r / 128f;
+
+
+                    // sRGB→Linear
+                    float lr = SrgbToLinear(sr);
+                    float lg = SrgbToLinear(sg);
+                    float lb = SrgbToLinear(sb);
+
+                    // Linear sRGB→Rec.2020
+                    float r2020 = 0.6274f * lr + 0.3293f * lg + 0.0433f * lb;
+                    float g2020 = 0.0691f * lr + 0.9195f * lg + 0.0114f * lb;
+                    float b2020 = 0.0164f * lr + 0.0880f * lg + 0.8956f * lb;
+
+                    // Apply gainmap
+                    float rr = r2020 * ( 1 + gain_r );
+                    float gg = g2020 * ( 1 + gain_g );
+                    float bb = b2020 * ( 1 + gain_b );
+
+                    // Linear  → Rec2020 HLG
+                    float or_ = LinearToHlg(rr);
+                    float og = LinearToHlg(gg);
+                    float ob = LinearToHlg(bb);
+
+                    outPixels[i] = HdrMergeUtil.PackBgr101010(or_, og, ob);
+                }
+            }
+
+            // 6) 写回并返回
+            outBmp.WritePixels(
+                new Int32Rect(0, 0, w, h),
+                outPixels, w * sizeof(uint), 0);
+            outBmp.Freeze();
+            //throw new InvalidDataException("result is " + outBmp.PixelHeight + "format:" + outBmp.Format);
+            return BitmapFrame.Create(outBmp);
+        }
+
+
+        private static float SrgbToLinear(float c) =>
+            c <= 0.04045f ? c / 12.92f : MathF.Pow((c + 0.055f) / 1.055f, 2.4f);
+
+        private static float LinearToHlg(float L) =>
+            L <= 1f / 12f ? MathF.Sqrt(3f * L)
+                       : a * MathF.Log(12f * L - b) + c;
+
+    }
 
     #endregion // Private functions
-
-
 }
