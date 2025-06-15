@@ -63,6 +63,12 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="D2Phap.DXControl" Version="4.1.0" />
+      <PackageReference Include="D2Phap.EggShell-x64" Version="1.0.517" />
+      <PackageReference Include="DirectNStandard" Version="1.17.2" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\ImageGlass.Base\ImageGlass.Base.csproj" />
         <ProjectReference Include="..\ImageGlass.WinTouch\ImageGlass.WinTouch.csproj" />
     </ItemGroup>

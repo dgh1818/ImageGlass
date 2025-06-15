@@ -4,6 +4,10 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.1.31911.260
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ImageGlass", "ImageGlass\ImageGlass.csproj", "{45AB9FE4-1E37-4589-A6A4-328405857E38}"
+	ProjectSection(ProjectDependencies) = postProject
+		{4CAAB9A9-D051-4BC2-8DD0-78F44D6DC932} = {4CAAB9A9-D051-4BC2-8DD0-78F44D6DC932}
+		{96A8D885-BB41-428F-90F5-021F345B4166} = {96A8D885-BB41-428F-90F5-021F345B4166}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Components", "Components", "{7C1E4F51-84BC-4B62-84CB-8261C06033E7}"
 EndProject
