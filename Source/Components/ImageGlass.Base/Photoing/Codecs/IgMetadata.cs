@@ -78,4 +78,5 @@ public class IgMetadata
     public int? ExifISOSpeed { get; set; } = null;
     public float? ExifFocalLength { get; set; } = null;
 
+    public string? CameraMaker { get; set; } = null; // camera brand
 }
