@@ -1772,9 +1772,9 @@ public static class PhotoCodec
                     float b2020 = 0.0164f * lr + 0.0880f * lg + 0.8956f * lb;
 
                     // Apply gainmap
-                    float rr = r2020 * ( 1 + gain_r );
-                    float gg = g2020 * ( 1 + gain_g );
-                    float bb = b2020 * ( 1 + gain_b );
+                    float rr = (float)(Math.Pow(2, gain_r) * (r2020 + 1/64) - 1/64);
+                    float gg = (float)(Math.Pow(2, gain_g) * (g2020 + 1/64) - 1/64);
+                    float bb = (float)(Math.Pow(2, gain_b) * (b2020 + 1/64) - 1/64);
 
                     // Linear  → Rec2020 HLG
                     float or_ = LinearToHlg(rr);
